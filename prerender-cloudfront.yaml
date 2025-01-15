@@ -5,10 +5,33 @@ Resources:
   WebBucket:
     Type: "AWS::S3::Bucket"
     Properties:
-      AccessControl: PublicRead
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: ObjectWriter
       WebsiteConfiguration:
         ErrorDocument: index.html
         IndexDocument: index.html
+
+  WebBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref WebBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join
+              - ''
+              - - !GetAtt WebBucket.Arn
+                - '/*'
+
   LambdaEdgeExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -33,9 +56,11 @@ Resources:
                   - "logs:CreateLogGroup"
                   - "logs:CreateLogStream"
                   - "logs:PutLogEvents"
+
   SetPrerenderHeader:
     Type: "AWS::Lambda::Function"
     Properties:
+      FunctionName: !Sub "${AWS::StackName}-SetPrerenderHeader"
       Handler: "index.handler"
       Role:
         Fn::GetAtt:
@@ -64,16 +89,19 @@ Resources:
                 }
                 callback(null, request);
             };
-      Runtime: "nodejs14.x"
+      Runtime: "nodejs20.x"
+
   SetPrerenderHeaderVersion3:
     Type: "AWS::Lambda::Version"
     Properties:
       FunctionName:
         Ref: "SetPrerenderHeader"
       Description: "SetPrerenderHeader"
+
   RedirectToPrerender:
     Type: "AWS::Lambda::Function"
     Properties:
+      FunctionName: !Sub "${AWS::StackName}-RedirectToPrerender"
       Handler: "index.handler"
       Role:
         Fn::GetAtt:
@@ -102,13 +130,15 @@ Resources:
               }
               callback(null, request);
           };
-      Runtime: "nodejs14.x"
+      Runtime: "nodejs20.x"
+
   RedirectToPrerenderVersion1:
     Type: "AWS::Lambda::Version"
     Properties:
       FunctionName:
         Ref: "RedirectToPrerender"
       Description: "RedirectToPrerender"
+
   CloudFront:
     Type: "AWS::CloudFront::Distribution"
     Properties:
@@ -139,6 +169,7 @@ Resources:
         CustomErrorResponses:
           - ErrorCode: 404
             ResponseCode: 404
+            ResponsePagePath: /404.html
         # If you wish to respond with 200 even if the page is not existing
         # CustomErrorResponses:
         #   - ErrorCode: 404
