@@ -1,27 +1,27 @@
 Parameters:
+  DeploymentName:
+    Description: Unique name used to create OAC and cache policy.
+    Type: String
+
   PrerenderToken:
     Type: String
+    Description: Prerender.io token
+
 Resources:
-  WebBucket:
-    Type: "AWS::S3::Bucket"
-    Properties:
-      AccessControl: PublicRead
-      WebsiteConfiguration:
-        ErrorDocument: index.html
-        IndexDocument: index.html
+
   LambdaEdgeExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - lambda.amazonaws.com
-            - edgelambda.amazonaws.com
-          Action:
-          - sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - edgelambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
       Policies:
         - PolicyName: logging
           PolicyDocument:
@@ -44,28 +44,28 @@ Resources:
       Code:
         ZipFile:
           !Sub |
-            'use strict';
-            /* change the version number below whenever this code is modified */
-            exports.handler = (event, context, callback) => {
-                const request = event.Records[0].cf.request;
-                const headers = request.headers;
-                const user_agent = headers['user-agent'];
-                const host = headers['host'];
-                if (user_agent && host) {
-                  var prerender = /googlebot|adsbot\-google|Feedfetcher\-Google|bingbot|yandex|baiduspider|Facebot|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkShare|W3C_Validator|redditbot|applebot|whatsapp|flipboard|tumblr|bitlybot|skypeuripreview|nuzzel|discordbot|google page speed|qwantify|pinterestbot|bitrix link preview|xing\-contenttabreceiver|chrome\-lighthouse|telegrambot|Perplexity|OAI-SearchBot|ChatGPT|GPTBot|ClaudeBot|Amazonbot/i.test(user_agent[0].value);
-                  prerender = prerender || /_escaped_fragment_/.test(request.querystring);
-                  prerender = prerender && ! /\.(js|css|xml|less|png|jpg|jpeg|gif|pdf|doc|txt|ico|rss|zip|mp3|rar|exe|wmv|doc|avi|ppt|mpg|mpeg|tif|wav|mov|psd|ai|xls|mp4|m4a|swf|dat|dmg|iso|flv|m4v|torrent|ttf|woff|svg|eot)$/i.test(request.uri);
-                  if (prerender) {
-                    headers['x-prerender-token'] = [{ key: 'X-Prerender-Token', value: '${PrerenderToken}'}];
-                    headers['x-prerender-host'] = [{ key: 'X-Prerender-Host', value: host[0].value}];
-                    headers['x-prerender-cachebuster'] = [{ key: 'X-Prerender-Cachebuster', value: Date.now().toString()}];
-                    headers['x-query-string'] = [{ key: 'X-Query-String', value: request.querystring}];
-                  }
+          'use strict';
+          /* change the version number below whenever this code is modified */
+          exports.handler = (event, context, callback) => {
+              const request = event.Records[0].cf.request;
+              const headers = request.headers;
+              const user_agent = headers['user-agent'];
+              const host = headers['host'];
+              if (user_agent && host) {
+                var prerender = /googlebot|adsbot\-google|Feedfetcher\-Google|bingbot|yandex|baiduspider|Facebot|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkShare|W3C_Validator|redditbot|applebot|whatsapp|flipboard|tumblr|bitlybot|skypeuripreview|nuzzel|discordbot|google page speed|qwantify|pinterestbot|bitrix link preview|xing\-contenttabreceiver|chrome\-lighthouse|telegrambot|Perplexity|OAI-SearchBot|ChatGPT|GPTBot|ClaudeBot|Amazonbot|integration-test/i.test(user_agent[0].value);
+                prerender = prerender || /_escaped_fragment_/.test(request.querystring);
+                prerender = prerender && ! /\.(js|css|xml|less|png|jpg|jpeg|gif|pdf|doc|txt|ico|rss|zip|mp3|rar|exe|wmv|doc|avi|ppt|mpg|mpeg|tif|wav|mov|psd|ai|xls|mp4|m4a|swf|dat|dmg|iso|flv|m4v|torrent|ttf|woff|svg|eot)$/i.test(request.uri);
+                if (prerender) {
+                  headers['x-prerender-token'] = [{ key: 'X-Prerender-Token', value: '${PrerenderToken}'}];
+                  headers['x-prerender-host'] = [{ key: 'X-Prerender-Host', value: host[0].value}];
+                  headers['x-prerender-cachebuster'] = [{ key: 'X-Prerender-Cachebuster', value: Date.now().toString()}];
+                  headers['x-query-string'] = [{ key: 'X-Query-String', value: request.querystring}];
                 }
-                callback(null, request);
-            };
-      Runtime: "nodejs14.x"
-  SetPrerenderHeaderVersion3:
+              }
+              callback(null, request);
+          };
+      Runtime: "nodejs22.x"
+  SetPrerenderHeaderVersion1:
     Type: "AWS::Lambda::Version"
     Properties:
       FunctionName:
@@ -102,17 +102,35 @@ Resources:
               }
               callback(null, request);
           };
-      Runtime: "nodejs14.x"
+      Runtime: "nodejs22.x"
   RedirectToPrerenderVersion1:
     Type: "AWS::Lambda::Version"
     Properties:
       FunctionName:
         Ref: "RedirectToPrerender"
       Description: "RedirectToPrerender"
-  CloudFront:
-    Type: "AWS::CloudFront::Distribution"
+
+  # Creates a new origin access control. The signing behavior "always" is the most common use case.
+  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-cloudfront-originaccesscontrol-originaccesscontrolconfig.html
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Ref DeploymentName
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
+        Enabled: true
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+        DefaultRootObject: index.html
         DefaultCacheBehavior:
           Compress: true
           # NOTE: we let cloudfront cache heavily the resurces of the SPA. Your deploy
@@ -122,33 +140,65 @@ Resources:
           MinTTL: 31536000
           DefaultTTL: 31536000
           ForwardedValues:
-            QueryString: false
+            QueryString: true
             Headers:
               - "X-Prerender-Token"
               - "X-Prerender-Host"
               - "X-Prerender-Cachebuster"
               - "X-Query-String"
               - "User-Agent"
-          TargetOriginId: origin
-          ViewerProtocolPolicy : allow-all
+          TargetOriginId: thisS3Origin
+          ViewerProtocolPolicy: allow-all
           LambdaFunctionAssociations:
             - EventType: viewer-request
-              LambdaFunctionARN: !Join [ ":", [ !GetAtt [SetPrerenderHeader, Arn], !GetAtt [SetPrerenderHeaderVersion3, Version] ] ]
+              LambdaFunctionARN: !Join [ ":", [ !GetAtt [ SetPrerenderHeader, Arn ], !GetAtt [ SetPrerenderHeaderVersion1, Version ] ] ]
             - EventType: origin-request
-              LambdaFunctionARN: !Join [ ":", [ !GetAtt [RedirectToPrerender, Arn], !GetAtt [RedirectToPrerenderVersion1, Version] ] ]
-        Enabled: true
-        CustomErrorResponses:
-          - ErrorCode: 404
-            ResponseCode: 404
-        # If you wish to respond with 200 even if the page is not existing
-        # CustomErrorResponses:
-        #   - ErrorCode: 404
-        #     ResponseCode: 200
-        #     ResponsePagePath: /index.html
-        HttpVersion: http2
+              LambdaFunctionARN: !Join [ ":", [ !GetAtt [ RedirectToPrerender, Arn ], !GetAtt [ RedirectToPrerenderVersion1, Version ] ] ]
         Origins:
-          - CustomOriginConfig:
-              OriginProtocolPolicy: http-only
-            DomainName: !Select [2, !Split [ '/', !GetAtt [WebBucket, WebsiteURL]]]
-            Id: origin
-        PriceClass: PriceClass_100
+          - DomainName: !GetAtt Bucket.DomainName
+            Id: thisS3Origin
+            OriginAccessControlId: !Ref CloudFrontOriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+
+  # Creates a new S3 bucket with SSE and public access blocked.
+  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket.html
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # Creates a bucket policy giving OAC read-only access to the S3 bucket.
+  # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Bucket
+      PolicyDocument:
+        Version: 2008-10-17
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Resource: !Sub "${Bucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution.Id}"
+
+Outputs:
+  CloudFrontDomain:
+    Description: URL of CloudFront distribution.
+    Value: !GetAtt CloudFrontDistribution.DomainName
+
