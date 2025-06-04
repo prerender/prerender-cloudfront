@@ -60,6 +60,7 @@ Resources:
                   headers['x-prerender-host'] = [{ key: 'X-Prerender-Host', value: host[0].value}];
                   headers['x-prerender-cachebuster'] = [{ key: 'X-Prerender-Cachebuster', value: Date.now().toString()}];
                   headers['x-query-string'] = [{ key: 'X-Query-String', value: request.querystring}];
+                  headers['x-user-agent'] = [{ key: 'X-User-Agent', value: user_agent }];
                 }
               }
               callback(null, request);
