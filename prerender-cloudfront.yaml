@@ -87,24 +87,26 @@ Resources:
           exports.handler = (event, context, callback) => {
                const request = event.Records[0].cf.request;
                if (request.headers['x-prerender-token'] && request.headers['x-prerender-host'] && request.headers['x-query-string']) {
+                 const originalHost = request.headers['x-prerender-host'][0].value;
                  request.querystring = request.headers['x-query-string'][0].value;
+                 request.headers['host'] = [{ key: 'host', value: 'service.prerender.io' }];
                  request.origin = {
                      custom: {
                          domainName: 'service.prerender.io',
                          port: 443,
                          protocol: 'https',
-                         readTimeout: 20,
-                         keepaliveTimeout: 5,
+                         readTimeout: 50,
+                         keepaliveTimeout: 20,
                          customHeaders: {},
-                         sslProtocols: ['TLSv1', 'TLSv1.1'],
-                         path: '/https%3A%2F%2F' + request.headers['x-prerender-host'][0].value
+                         sslProtocols: ['TLSv1', 'TLSv1.1', 'TLSv1.2'],
+                         path: '/https%3A%2F%2F' + originalHost
                      }
                  };
               }
               callback(null, request);
           };
       Runtime: "nodejs22.x"
-  RedirectToPrerenderVersion1:
+  RedirectToPrerenderVersion2:
     Type: "AWS::Lambda::Version"
     Properties:
       FunctionName:
@@ -154,7 +156,7 @@ Resources:
             - EventType: viewer-request
               LambdaFunctionARN: !Join [ ":", [ !GetAtt [ SetPrerenderHeader, Arn ], !GetAtt [ SetPrerenderHeaderVersion1, Version ] ] ]
             - EventType: origin-request
-              LambdaFunctionARN: !Join [ ":", [ !GetAtt [ RedirectToPrerender, Arn ], !GetAtt [ RedirectToPrerenderVersion1, Version ] ] ]
+              LambdaFunctionARN: !Join [ ":", [ !GetAtt [ RedirectToPrerender, Arn ], !GetAtt [ RedirectToPrerenderVersion2, Version ] ] ]
         Origins:
           - DomainName: !GetAtt Bucket.DomainName
             Id: thisS3Origin
@@ -202,4 +204,3 @@ Outputs:
   CloudFrontDomain:
     Description: URL of CloudFront distribution.
     Value: !GetAtt CloudFrontDistribution.DomainName
-
