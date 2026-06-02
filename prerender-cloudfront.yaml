@@ -58,6 +58,7 @@ Resources:
                 if (prerender) {
                   headers['x-prerender-token'] = [{ key: 'X-Prerender-Token', value: '${PrerenderToken}'}];
                   headers['x-prerender-host'] = [{ key: 'X-Prerender-Host', value: host[0].value}];
+                  headers['x-prerender-int-type'] = [{ key: 'X-Prerender-Int-Type', value: 'cloudfront'}];
                   headers['x-prerender-cachebuster'] = [{ key: 'X-Prerender-Cachebuster', value: Date.now().toString()}];
                   headers['x-query-string'] = [{ key: 'X-Query-String', value: request.querystring}];
                   headers['x-user-agent'] = [{ key: 'X-User-Agent', value: user_agent }];
@@ -147,6 +148,7 @@ Resources:
             Headers:
               - "X-Prerender-Token"
               - "X-Prerender-Host"
+              - "X-Prerender-Int-Type"
               - "X-Prerender-Cachebuster"
               - "X-Query-String"
               - "User-Agent"
