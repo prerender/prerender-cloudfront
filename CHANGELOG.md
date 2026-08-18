@@ -10,6 +10,10 @@
   received `Amazon CloudFront` as the crawler identity.
 - Bumped the `AWS::Lambda::Version` logical IDs, so a stack update
   publishes new function versions.
+- Added the `X-Prerender-Int-Version` header (`2.0.0`), sent next to
+  `X-Prerender-Int-Type: cloudfront` and forwarded by the cache behavior,
+  so the origin of a request stays identifiable when the `User-Agent` is
+  restored. Absence of the header means a stack older than 2.0.0.
 
 ## Older notes
 

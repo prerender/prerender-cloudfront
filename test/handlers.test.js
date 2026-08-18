@@ -93,6 +93,23 @@ check('viewer-request marks a bot request and captures the user agent as a strin
   assert.strictEqual(typeof request.headers['x-user-agent'][0].value, 'string');
 });
 
+check('viewer-request identifies the integration and its version', async () => {
+  const request = await run(setPrerenderHeader, viewerRequestEvent(BOT_UA));
+
+  assert.strictEqual(request.headers['x-prerender-int-type'][0].value, 'cloudfront');
+  assert.match(request.headers['x-prerender-int-version'][0].value, /^\d+\.\d+\.\d+$/);
+});
+
+check('origin-request keeps the integration markers next to the restored user agent', async () => {
+  const marked = await run(setPrerenderHeader, viewerRequestEvent(BOT_UA));
+  const masked = maskUserAgent(marked);
+
+  const request = await run(redirectToPrerender, { Records: [{ cf: { request: masked } }] });
+
+  assert.strictEqual(request.headers['x-prerender-int-type'][0].value, 'cloudfront');
+  assert.strictEqual(request.headers['x-user-agent'][0].value, BOT_UA);
+});
+
 check('viewer-request leaves a human request untouched', async () => {
   const humanUa = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126 Safari/537.36';
   const request = await run(setPrerenderHeader, viewerRequestEvent(humanUa));
@@ -134,6 +151,10 @@ check('forwarded header list contains User-Agent and X-User-Agent', async () => 
   const forwarded = yaml.match(/^\s+- "[\w-]+"$/gm).map(l => l.trim());
   assert.ok(forwarded.includes('- "User-Agent"'), `User-Agent not forwarded: ${forwarded}`);
   assert.ok(forwarded.includes('- "X-User-Agent"'), `X-User-Agent not forwarded: ${forwarded}`);
+  assert.ok(
+    forwarded.includes('- "X-Prerender-Int-Version"'),
+    `X-Prerender-Int-Version not forwarded: ${forwarded}`
+  );
 });
 
 (async () => {

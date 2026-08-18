@@ -64,6 +64,13 @@ This template protects against that in two ways:
    not a read-only header in viewer-request or origin-request events, so
    this write is permitted.
 
+The integration stays identifiable after the restore. The viewer-request
+function also sends `X-Prerender-Int-Type: cloudfront` and
+`X-Prerender-Int-Version`, so Prerender.io knows that the request came
+through CloudFront and which version of these functions produced it.
+Bump the version value when you change the function code. A request
+without the version header comes from a stack that is older than 2.0.0.
+
 If you added the two Lambda@Edge functions to an existing distribution
 instead of deploying this stack, forward `User-Agent` and `X-User-Agent`
 in the cache behavior of that distribution.
