@@ -59,15 +59,16 @@ Resources:
                   headers['x-prerender-token'] = [{ key: 'X-Prerender-Token', value: '${PrerenderToken}'}];
                   headers['x-prerender-host'] = [{ key: 'X-Prerender-Host', value: host[0].value}];
                   headers['x-prerender-int-type'] = [{ key: 'X-Prerender-Int-Type', value: 'cloudfront'}];
+                  headers['x-prerender-int-version'] = [{ key: 'X-Prerender-Int-Version', value: '2.0.0'}];
                   headers['x-prerender-cachebuster'] = [{ key: 'X-Prerender-Cachebuster', value: Date.now().toString()}];
                   headers['x-query-string'] = [{ key: 'X-Query-String', value: request.querystring}];
-                  headers['x-user-agent'] = [{ key: 'X-User-Agent', value: user_agent }];
+                  headers['x-user-agent'] = [{ key: 'X-User-Agent', value: user_agent[0].value}];
                 }
               }
               callback(null, request);
           };
       Runtime: "nodejs22.x"
-  SetPrerenderHeaderVersion1:
+  SetPrerenderHeaderVersion2:
     Type: "AWS::Lambda::Version"
     Properties:
       FunctionName:
@@ -91,6 +92,19 @@ Resources:
                  const originalHost = request.headers['x-prerender-host'][0].value;
                  request.querystring = request.headers['x-query-string'][0].value;
                  request.headers['host'] = [{ key: 'host', value: 'service.prerender.io' }];
+                 /* SetPrerenderHeader copied the true User-Agent into X-User-Agent in the
+                    viewer-request event. CloudFront then builds the origin request, and in that
+                    step it replaces User-Agent with the constant "Amazon CloudFront" unless the
+                    cache policy or origin request policy forwards User-Agent. The custom header
+                    is not touched. Copy it back here, in the origin-request event, so that
+                    Prerender.io receives the crawler identity even when User-Agent is not
+                    forwarded. User-Agent is not read-only in this event, so the write is legal:
+                    https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/edge-function-restrictions-all.html
+                    The integration stays identifiable through X-Prerender-Int-Type and
+                    X-Prerender-Int-Version. */
+                 if (request.headers['x-user-agent']) {
+                   request.headers['user-agent'] = [{ key: 'User-Agent', value: request.headers['x-user-agent'][0].value }];
+                 }
                  request.origin = {
                      custom: {
                          domainName: 'service.prerender.io',
@@ -107,7 +121,7 @@ Resources:
               callback(null, request);
           };
       Runtime: "nodejs22.x"
-  RedirectToPrerenderVersion2:
+  RedirectToPrerenderVersion3:
     Type: "AWS::Lambda::Version"
     Properties:
       FunctionName:
@@ -149,16 +163,18 @@ Resources:
               - "X-Prerender-Token"
               - "X-Prerender-Host"
               - "X-Prerender-Int-Type"
+              - "X-Prerender-Int-Version"
               - "X-Prerender-Cachebuster"
               - "X-Query-String"
               - "User-Agent"
+              - "X-User-Agent"
           TargetOriginId: thisS3Origin
           ViewerProtocolPolicy: allow-all
           LambdaFunctionAssociations:
             - EventType: viewer-request
-              LambdaFunctionARN: !Join [ ":", [ !GetAtt [ SetPrerenderHeader, Arn ], !GetAtt [ SetPrerenderHeaderVersion1, Version ] ] ]
+              LambdaFunctionARN: !Join [ ":", [ !GetAtt [ SetPrerenderHeader, Arn ], !GetAtt [ SetPrerenderHeaderVersion2, Version ] ] ]
             - EventType: origin-request
-              LambdaFunctionARN: !Join [ ":", [ !GetAtt [ RedirectToPrerender, Arn ], !GetAtt [ RedirectToPrerenderVersion2, Version ] ] ]
+              LambdaFunctionARN: !Join [ ":", [ !GetAtt [ RedirectToPrerender, Arn ], !GetAtt [ RedirectToPrerenderVersion3, Version ] ] ]
         Origins:
           - DomainName: !GetAtt Bucket.DomainName
             Id: thisS3Origin

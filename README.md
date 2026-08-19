@@ -35,6 +35,46 @@ partition the cache. The second function, run after the cache, detects
 the presence of the header and, if present, routes the request to
 Prerender.io
 
+Tests
+--
+
+The two Lambda@Edge handlers are extracted from the template and run
+against synthetic CloudFront events. No dependencies are needed:
+
+    node test/handlers.test.js
+
+Crawler User-Agent
+--
+
+CloudFront replaces the `User-Agent` header with the constant
+`Amazon CloudFront` on the origin request unless the header is forwarded
+(cache policy, origin request policy, or the legacy whitelist in
+`ForwardedValues.Headers`). When that happens Prerender.io receives
+`Amazon CloudFront` instead of `Googlebot`, `GPTBot`, and so on. The
+result is wrong crawler statistics in the Prerender.io dashboard, and no
+mobile-adaptive rendering, because the device type is derived from the
+`User-Agent`.
+
+This template protects against that in two ways:
+
+1. The cache behavior forwards `User-Agent` and `X-User-Agent`.
+2. The viewer-request function copies the true `User-Agent` into
+   `X-User-Agent`, and the origin-request function writes it back into
+   `User-Agent` before the request goes to Prerender.io. `User-Agent` is
+   not a read-only header in viewer-request or origin-request events, so
+   this write is permitted.
+
+The integration stays identifiable after the restore. The viewer-request
+function also sends `X-Prerender-Int-Type: cloudfront` and
+`X-Prerender-Int-Version`, so Prerender.io knows that the request came
+through CloudFront and which version of these functions produced it.
+Bump the version value when you change the function code. A request
+without the version header comes from a stack that is older than 2.0.0.
+
+If you added the two Lambda@Edge functions to an existing distribution
+instead of deploying this stack, forward `User-Agent` and `X-User-Agent`
+in the cache behavior of that distribution.
+
 Caching
 --
 
